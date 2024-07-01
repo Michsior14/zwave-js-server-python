@@ -108,8 +108,6 @@ def test_from_state(client):
     assert node.ready is True
     assert node.device_class.basic.key == 2
     assert node.device_class.generic.label == "Static Controller"
-    assert node.device_class.mandatory_supported_ccs == []
-    assert node.device_class.mandatory_controlled_ccs == [32]
 
     assert node.is_listening is True
     assert node.is_frequent_listening is False
@@ -196,7 +194,11 @@ async def test_last_seen(lock_schlage_be469):
     assert lock_schlage_be469.last_seen == datetime(
         2023, 7, 18, 15, 42, 34, 701000, UTC
     )
-    assert lock_schlage_be469.last_seen == lock_schlage_be469.statistics.last_seen
+    assert (
+        lock_schlage_be469.last_seen
+        == lock_schlage_be469.statistics.last_seen
+        == datetime.fromisoformat(lock_schlage_be469.statistics.data.get("lastSeen"))
+    )
 
 
 async def test_highest_security_value(lock_schlage_be469, ring_keypad):
@@ -556,9 +558,7 @@ async def test_get_value_metadata(multisensor_6, uuid4, mock_command):
         },
     )
 
-    value_id = "52-32-0-targetValue"
-    value = node.values[value_id]
-    result = await node.async_get_value_metadata(value)
+    result = await node.async_get_value_metadata("52-32-0-targetValue")
 
     assert result.type == "any"
     assert result.readable is True
@@ -573,6 +573,8 @@ async def test_get_value_metadata(multisensor_6, uuid4, mock_command):
         "valueId": {"commandClass": 32, "endpoint": 0, "property": "targetValue"},
         "messageId": uuid4,
     }
+
+    ack_commands.clear()
 
 
 async def test_abort_firmware_update(multisensor_6, uuid4, mock_command):
