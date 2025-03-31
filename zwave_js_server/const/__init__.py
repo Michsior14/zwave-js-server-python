@@ -8,12 +8,12 @@ import logging
 from typing import TypedDict
 
 PACKAGE_NAME = "zwave-js-server-python"
-__version__ = "0.56.0"
+__version__ = "0.62.0"
 
 # minimal server schema version we can handle
-MIN_SERVER_SCHEMA_VERSION = 35
+MIN_SERVER_SCHEMA_VERSION = 39
 # max server schema version we can handle (and our code is compatible with)
-MAX_SERVER_SCHEMA_VERSION = 35
+MAX_SERVER_SCHEMA_VERSION = 40
 
 VALUE_UNKNOWN = "unknown"
 
@@ -320,7 +320,7 @@ class InclusionState(IntEnum):
 class RFRegion(IntEnum):
     """Enum for all known RF regions."""
 
-    # https://github.com/zwave-js/node-zwave-js/blob/master/packages/zwave-js/src/lib/serialapi/misc/SerialAPISetupMessages.ts#L41
+    # https://github.com/zwave-js/node-zwave-js/blob/master/packages/core/src/definitions/RFRegion.ts#L1
     EUROPE = 0
     USA = 1
     AUSTRALIA_AND_NEW_ZEALAND = 2
@@ -330,6 +330,7 @@ class RFRegion(IntEnum):
     RUSSIA = 7
     CHINA = 8
     USA_LONG_RANGE = 9
+    EUROPE_LONG_RANGE = 11
     JAPAN = 32
     KOREA = 33
     UNKNOWN = 254
@@ -505,3 +506,16 @@ class SupervisionStatus(IntEnum):
     WORKING = 1
     FAIL = 2
     SUCCESS = 255
+
+
+class AssociationCheckResult(IntEnum):
+    """Enum for all known association check results."""
+
+    # https://github.com/zwave-js/node-zwave-js/blob/master/packages/cc/src/lib/_Types.ts#L47
+    OK = 1
+    FORBIDDEN_DESTINATION_IS_LONG_RANGE = 2
+    FORBIDDEN_SOURCE_IS_LONG_RANGE = 3
+    FORBIDDEN_SELF_ASSOCIATION = 4
+    FORBIDDEN_SECURITY_CLASS_MISMATCH = 5
+    FORBIDDEN_DESTINATION_SECURITY_CLASS_NOT_GRANTED = 6
+    FORBIDDEN_NO_SUPPORTED_CCS = 7

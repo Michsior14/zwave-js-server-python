@@ -39,6 +39,7 @@ from zwave_js_server.exceptions import (
     UnwriteableValue,
 )
 from zwave_js_server.model import endpoint as endpoint_pkg, node as node_pkg
+from zwave_js_server.model.node import Node
 from zwave_js_server.model.node.firmware import (
     NodeFirmwareUpdateInfo,
     NodeFirmwareUpdateStatus,
@@ -108,8 +109,6 @@ def test_from_state(client):
     assert node.ready is True
     assert node.device_class.basic.key == 2
     assert node.device_class.generic.label == "Static Controller"
-    assert node.device_class.mandatory_supported_ccs == []
-    assert node.device_class.mandatory_controlled_ccs == [32]
 
     assert node.is_listening is True
     assert node.is_frequent_listening is False
@@ -196,7 +195,11 @@ async def test_last_seen(lock_schlage_be469):
     assert lock_schlage_be469.last_seen == datetime(
         2023, 7, 18, 15, 42, 34, 701000, UTC
     )
-    assert lock_schlage_be469.last_seen == lock_schlage_be469.statistics.last_seen
+    assert (
+        lock_schlage_be469.last_seen
+        == lock_schlage_be469.statistics.last_seen
+        == datetime.fromisoformat(lock_schlage_be469.statistics.data.get("lastSeen"))
+    )
 
 
 async def test_highest_security_value(lock_schlage_be469, ring_keypad):
@@ -205,14 +208,17 @@ async def test_highest_security_value(lock_schlage_be469, ring_keypad):
     assert ring_keypad.highest_security_class is None
 
 
-async def test_command_classes(endpoints_with_command_classes):
+async def test_command_classes(endpoints_with_command_classes: Node) -> None:
     """Test command_classes property on endpoint."""
-    assert len(endpoints_with_command_classes.endpoints[0].command_classes) == 17
-    assert endpoints_with_command_classes.endpoints[0].command_classes[0].id == 38
-    assert (
-        endpoints_with_command_classes.endpoints[0].command_classes[0].command_class
-        == CommandClass.SWITCH_MULTILEVEL
-    )
+    node = endpoints_with_command_classes
+    assert len(node.endpoints[0].command_classes) == 17
+    command_class_info = node.endpoints[0].command_classes[0]
+    assert command_class_info.id == 38
+    assert command_class_info.command_class == CommandClass.SWITCH_MULTILEVEL
+    assert command_class_info.name == "Multilevel Switch"
+    assert command_class_info.version == 2
+    assert command_class_info.is_secure is False
+    assert command_class_info.to_dict() == command_class_info.data
 
 
 async def test_device_config(
@@ -556,9 +562,7 @@ async def test_get_value_metadata(multisensor_6, uuid4, mock_command):
         },
     )
 
-    value_id = "52-32-0-targetValue"
-    value = node.values[value_id]
-    result = await node.async_get_value_metadata(value)
+    result = await node.async_get_value_metadata("52-32-0-targetValue")
 
     assert result.type == "any"
     assert result.readable is True
@@ -573,6 +577,8 @@ async def test_get_value_metadata(multisensor_6, uuid4, mock_command):
         "valueId": {"commandClass": 32, "endpoint": 0, "property": "targetValue"},
         "messageId": uuid4,
     }
+
+    ack_commands.clear()
 
 
 async def test_abort_firmware_update(multisensor_6, uuid4, mock_command):
@@ -2592,7 +2598,7 @@ async def test_set_raw_config_parameter_value(
         {},
     )
 
-    _, result = await node.async_set_raw_config_parameter_value(1, 101, 1)
+    result = await node.async_set_raw_config_parameter_value(1, 101, 1)
     assert result == SetConfigParameterResult(CommandStatus.QUEUED)
 
     assert len(ack_commands) == 1
@@ -2601,17 +2607,13 @@ async def test_set_raw_config_parameter_value(
         "command": "endpoint.set_raw_config_parameter_value",
         "nodeId": node.node_id,
         "endpoint": 0,
-        "options": {
-            "parameter": 101,
-            "bitMask": 1,
-            "value": 1,
-        },
+        "parameter": 101,
+        "bitMask": 1,
+        "value": 1,
         "messageId": uuid4,
     }
 
-    _, result = await node.async_set_raw_config_parameter_value(
-        "Disable", "Stay Awake in Battery Mode"
-    )
+    result = await node.async_set_raw_config_parameter_value(2, 0)
     assert result == SetConfigParameterResult(CommandStatus.QUEUED)
 
     assert len(ack_commands) == 2
@@ -2620,10 +2622,8 @@ async def test_set_raw_config_parameter_value(
         "command": "endpoint.set_raw_config_parameter_value",
         "nodeId": node.node_id,
         "endpoint": 0,
-        "options": {
-            "parameter": 2,
-            "value": 0,
-        },
+        "parameter": 0,
+        "value": 2,
         "messageId": uuid4,
     }
 
@@ -2633,7 +2633,7 @@ async def test_set_raw_config_parameter_value(
     )
     node.receive_event(event)
 
-    _, result = await node.async_set_raw_config_parameter_value(
+    result = await node.async_set_raw_config_parameter_value(
         1, 2, value_size=1, value_format=ConfigurationValueFormat.SIGNED_INTEGER
     )
     assert result == SetConfigParameterResult(CommandStatus.ACCEPTED)
@@ -2644,24 +2644,14 @@ async def test_set_raw_config_parameter_value(
         "command": "endpoint.set_raw_config_parameter_value",
         "nodeId": node.node_id,
         "endpoint": 0,
-        "options": {
-            "parameter": 2,
-            "valueSize": 1,
-            "valueFormat": 0,
-            "value": 1,
-        },
+        "parameter": 2,
+        "valueSize": 1,
+        "valueFormat": 0,
+        "value": 1,
         "messageId": uuid4,
     }
 
     # Test failures
-    with pytest.raises(NotFoundError):
-        await node.async_set_raw_config_parameter_value(
-            "fake", "Stay Awake in Battery Mode"
-        )
-
-    with pytest.raises(NotFoundError):
-        await node.async_set_raw_config_parameter_value(1, 1000)
-
     with pytest.raises(ValueError):
         await node.async_set_raw_config_parameter_value(1, 101, 1, 1)
 
@@ -2676,6 +2666,30 @@ async def test_set_raw_config_parameter_value(
         )
 
 
+async def test_get_raw_config_parameter_value(
+    multisensor_6: node_pkg.Node, uuid4, mock_command
+):
+    """Test get raw config parameter value."""
+    node = multisensor_6
+
+    ack_commands = mock_command(
+        {"command": "endpoint.get_raw_config_parameter_value", "nodeId": node.node_id},
+        {"value": 1},
+    )
+
+    value = await node.async_get_raw_config_parameter_value(101)
+    assert value == 1
+
+    assert len(ack_commands) == 1
+    assert ack_commands[0] == {
+        "command": "endpoint.get_raw_config_parameter_value",
+        "nodeId": node.node_id,
+        "endpoint": 0,
+        "parameter": 101,
+        "messageId": uuid4,
+    }
+
+
 async def test_supervision_result(inovelli_switch: node_pkg.Node, uuid4, mock_command):
     """Test Supervision Result."""
     node = inovelli_switch
@@ -2685,7 +2699,7 @@ async def test_supervision_result(inovelli_switch: node_pkg.Node, uuid4, mock_co
         {"result": {"status": 1, "remainingDuration": "default"}},
     )
 
-    _, result = await node.async_set_raw_config_parameter_value(1, 1)
+    result = await node.async_set_raw_config_parameter_value(1, 1)
     assert result.result.status is SupervisionStatus.WORKING
     duration = result.result.remaining_duration
     assert duration.unit == "default"

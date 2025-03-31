@@ -21,6 +21,14 @@ class BaseEventModel(BaseModel):
     source: Literal["controller", "driver", "node"]
     event: str
 
+    @classmethod
+    def from_dict(cls, data: dict) -> BaseEventModel:
+        """Initialize from dict."""
+        return cls(
+            source=data["source"],
+            event=data["event"],
+        )
+
 
 @dataclass
 class Event:
@@ -74,4 +82,4 @@ class EventBase:
         if handler is None:
             LOGGER.debug("Received unknown event: %s", event)
             return
-        handler(event)
+        handler(event)  # pylint: disable=not-callable

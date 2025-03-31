@@ -2,8 +2,10 @@
 
 import asyncio
 from collections import deque
+from collections.abc import Generator
 from copy import deepcopy
 import json
+from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
 from aiohttp import ClientSession, ClientWebSocketResponse
@@ -16,6 +18,7 @@ from zwave_js_server.model.driver import Driver
 from zwave_js_server.model.node import Node
 
 from . import load_fixture
+from .common import MockCommandProtocol
 
 # pylint: disable=protected-access, unused-argument
 
@@ -23,7 +26,7 @@ TEST_URL = "ws://test.org:3000"
 
 
 @pytest.fixture(name="controller_state", scope="session")
-def controller_state_fixture():
+def controller_state_fixture() -> dict[str, Any]:
     """Load the controller state fixture data."""
     return json.loads(load_fixture("controller_state.json"))
 
@@ -38,6 +41,12 @@ def multisensor_6_state_fixture():
 def lock_schlage_be469_state_fixture():
     """Load the schlage lock node state fixture data."""
     return json.loads(load_fixture("lock_schlage_be469_state.json"))
+
+
+@pytest.fixture(name="timed_lock_state", scope="session")
+def timed_lock_state_fixture() -> dict[str, Any]:
+    """Load the timed lock node state fixture data."""
+    return json.loads(load_fixture("timed_lock_state.json"))
 
 
 @pytest.fixture(name="climate_radio_thermostat_ct100_plus_state", scope="session")
@@ -118,15 +127,21 @@ def lock_ultraloq_ubolt_pro_state_fixture():
     return json.loads(load_fixture("lock_ultraloq_ubolt_pro_state.json"))
 
 
+@pytest.fixture(name="device_config", scope="session")
+def device_config_fixture() -> dict[str, Any]:
+    """Load the device config fixture data."""
+    return json.loads(load_fixture("device_config.json"))
+
+
 @pytest.fixture(name="client_session")
-def client_session_fixture(ws_client):
+def client_session_fixture(ws_client: AsyncMock) -> AsyncMock:
     """Mock an aiohttp client session."""
     client_session = AsyncMock(spec_set=ClientSession)
     client_session.ws_connect.side_effect = AsyncMock(return_value=ws_client)
     return client_session
 
 
-def create_ws_message(result):
+def create_ws_message(result: dict[str, Any]) -> Mock:
     """Return a mock WSMessage."""
     message = Mock(spec_set=WSMessage)
     message.type = WSMsgType.TEXT
@@ -136,20 +151,20 @@ def create_ws_message(result):
 
 
 @pytest.fixture(name="messages")
-def messages_fixture():
+def messages_fixture() -> deque[Mock]:
     """Return a message buffer for the WS client."""
     return deque()
 
 
 @pytest.fixture(name="ws_client")
 async def ws_client_fixture(
-    version_data,
-    ws_message,
-    result,
-    messages,
-    initialize_data,
-    get_log_config_data,
-):
+    version_data: dict[str, Any],
+    ws_message: Mock,
+    result: dict[str, Any],
+    messages: deque[Mock],
+    initialize_data: dict[str, Any],
+    get_log_config_data: dict[str, Any],
+) -> AsyncMock:
     """Mock a websocket client.
 
     This fixture only allows a single message to be received.
@@ -164,7 +179,7 @@ async def ws_client_fixture(
     for data in (version_data, initialize_data, get_log_config_data, result):
         messages.append(create_ws_message(data))
 
-    async def receive():
+    async def receive() -> Mock:
         """Return a websocket message."""
         await asyncio.sleep(0)
 
@@ -178,7 +193,7 @@ async def ws_client_fixture(
 
     ws_client.receive.side_effect = receive
 
-    async def close_client(msg):
+    async def close_client(msg: dict[str, Any]) -> None:
         """Close the client."""
         if msg["command"] in ("initialize", "start_listening"):
             return
@@ -195,7 +210,7 @@ async def ws_client_fixture(
 
     ws_client.send_json.side_effect = close_client
 
-    async def reset_close():
+    async def reset_close() -> None:
         """Reset the websocket client close method."""
         ws_client.closed = True
 
@@ -223,7 +238,7 @@ async def driver_ready_fixture():
 
 
 @pytest.fixture(name="version_data")
-def version_data_fixture():
+def version_data_fixture() -> dict[str, Any]:
     """Return mock version data."""
     return {
         "type": "version",
@@ -231,12 +246,12 @@ def version_data_fixture():
         "serverVersion": "test_server_version",
         "homeId": "test_home_id",
         "minSchemaVersion": 0,
-        "maxSchemaVersion": 35,
+        "maxSchemaVersion": 40,
     }
 
 
 @pytest.fixture(name="initialize_data")
-def initialize_data_fixture():
+def initialize_data_fixture() -> dict[str, Any]:
     """Return mock initialize data."""
     return {
         "type": "result",
@@ -247,7 +262,7 @@ def initialize_data_fixture():
 
 
 @pytest.fixture(name="log_config")
-def log_config_fixture():
+def log_config_fixture() -> dict[str, Any]:
     """Return log config."""
     return {
         "enabled": True,
@@ -259,7 +274,7 @@ def log_config_fixture():
 
 
 @pytest.fixture(name="get_log_config_data")
-def get_log_config_data_fixture(log_config):
+def get_log_config_data_fixture(log_config: dict[str, Any]) -> dict[str, Any]:
     """Return mock get_log_config data."""
     return {
         "type": "result",
@@ -276,7 +291,7 @@ def url_fixture():
 
 
 @pytest.fixture(name="result")
-def result_fixture(controller_state, uuid4):
+def result_fixture(controller_state: dict[str, Any], uuid4: str) -> dict[str, Any]:
     """Return a server result message."""
     return {
         "type": "result",
@@ -287,13 +302,13 @@ def result_fixture(controller_state, uuid4):
 
 
 @pytest.fixture(name="ws_message")
-def ws_message_fixture(result):
+def ws_message_fixture(result: dict[str, Any]) -> Mock:
     """Return a mock WSMessage."""
     return create_ws_message(result)
 
 
 @pytest.fixture(name="uuid4")
-def mock_uuid_fixture():
+def mock_uuid_fixture() -> Generator[str, None, None]:
     """Patch uuid4."""
     uuid4_hex = "1234"
     with patch("uuid.uuid4") as uuid4:
@@ -302,7 +317,11 @@ def mock_uuid_fixture():
 
 
 @pytest.fixture(name="client")
-async def client_fixture(client_session, ws_client, uuid4):
+async def client_fixture(
+    client_session: AsyncMock,
+    ws_client: AsyncMock,
+    uuid4: str,
+) -> Client:
     """Return a client with a mock websocket transport.
 
     This fixture needs to be a coroutine function to get an event loop
@@ -314,7 +333,9 @@ async def client_fixture(client_session, ws_client, uuid4):
 
 
 @pytest.fixture(name="mock_command")
-def mock_command_fixture(ws_client, client, uuid4):
+def mock_command_fixture(
+    ws_client: AsyncMock, client: Client, uuid4: str
+) -> MockCommandProtocol:
     """Mock a command and response."""
     mock_responses: list[tuple[dict, dict, bool]] = []
     ack_commands: list[dict] = []
@@ -329,7 +350,7 @@ def mock_command_fixture(ws_client, client, uuid4):
         mock_responses.append((match_command, response, success))
         return ack_commands
 
-    async def set_response(message):
+    async def set_response(message: dict[str, Any]) -> None:
         """Check the message and set the mocked response if a command matches."""
         for match_command, response, success in mock_responses:
             if all(message[key] == value for key, value in match_command.items()):
@@ -354,7 +375,11 @@ def mock_command_fixture(ws_client, client, uuid4):
 
 
 @pytest.fixture(name="driver")
-def driver_fixture(client, controller_state, log_config):
+def driver_fixture(
+    client: Client,
+    controller_state: dict[str, Any],
+    log_config: dict[str, Any],
+) -> Driver:
     """Return a driver instance with a supporting client."""
     client.driver = Driver(client, deepcopy(controller_state), log_config)
     return client.driver
@@ -372,6 +397,14 @@ def multisensor_6_fixture(driver, multisensor_6_state):
 def lock_schlage_be469_fixture(driver, lock_schlage_be469_state):
     """Mock a schlage lock node."""
     node = Node(driver.client, deepcopy(lock_schlage_be469_state))
+    driver.controller.nodes[node.node_id] = node
+    return node
+
+
+@pytest.fixture(name="timed_lock")
+def timed_lock_fixture(driver: Driver, timed_lock_state: dict[str, Any]) -> Node:
+    """Mock a schlage lock node."""
+    node = Node(driver.client, deepcopy(timed_lock_state))
     driver.controller.nodes[node.node_id] = node
     return node
 

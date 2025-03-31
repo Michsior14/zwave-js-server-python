@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from ..event import BaseEventModel, Event, EventBase
+from .config_manager import ConfigManager
 from .controller import Controller
 from .log_config import LogConfig, LogConfigDataType
 from .log_message import LogMessage, LogMessageDataType
@@ -29,6 +30,15 @@ class LogConfigUpdatedEventModel(BaseDriverEventModel):
 
     event: Literal["log config updated"]
     config: LogConfigDataType
+
+    @classmethod
+    def from_dict(cls, data: dict) -> LogConfigUpdatedEventModel:
+        """Initialize from dict."""
+        return cls(
+            source=data["source"],
+            event=data["event"],
+            config=data["config"],
+        )
 
 
 class AllNodesReadyEventModel(BaseDriverEventModel):
@@ -70,6 +80,7 @@ class Driver(EventBase):
         self.client = client
         self.controller = Controller(client, state)
         self.log_config = LogConfig.from_dict(log_config)
+        self.config_manager = ConfigManager(client)
 
     def __hash__(self) -> int:
         """Return the hash."""
@@ -87,7 +98,7 @@ class Driver(EventBase):
             self.controller.receive_event(event)
             return
 
-        DRIVER_EVENT_MODEL_MAP[event.type](**event.data)
+        DRIVER_EVENT_MODEL_MAP[event.type].from_dict(event.data)
 
         self._handle_event_protocol(event)
 

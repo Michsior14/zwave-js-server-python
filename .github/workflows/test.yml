@@ -16,13 +16,14 @@ jobs:
       matrix:
         python-version:
           - "3.12"
+          - "3.13"
 
     steps:
-      - uses: actions/checkout@v4.1.6
+      - uses: actions/checkout@v4.2.2
         with:
           fetch-depth: 2
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5.1.0
+        uses: actions/setup-python@v5.5.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
@@ -32,7 +33,7 @@ jobs:
       - name: Test with tox
         run: tox
       - name: Upload coverage data
-        uses: actions/upload-artifact@v4.3.3
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: coverage-${{ matrix.python-version }}
           path: "coverage.xml"
@@ -42,12 +43,12 @@ jobs:
     needs: build
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4.1.6
+        uses: actions/checkout@v4.2.2
         with:
           fetch-depth: 2
       - name: Download all coverage data
-        uses: actions/download-artifact@v4.1.7
+        uses: actions/download-artifact@v4.2.1
       - name: Upload coverage report
-        uses: codecov/codecov-action@v4.4.1
+        uses: codecov/codecov-action@v5.4.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

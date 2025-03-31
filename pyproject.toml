@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=77.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,7 +8,7 @@ authors = [{ name = "Home Assistant Team", email = "hello@home-assistant.io" }]
 description = "Python wrapper for zwave-js-server"
 readme = "README.md"
 requires-python = ">=3.12"
-license = { file = "LICENSE" }
+license = "Apache-2.0"
 keywords = ["home", "automation", "zwave", "zwave-js"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -16,6 +16,7 @@ classifiers = [
     "Natural Language :: English",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Home Automation",
 ]
 dependencies = ["aiohttp>3", "pydantic>=1.10.0"]
@@ -84,10 +85,27 @@ max-attributes = 15
 [tool.pylint.FORMAT]
 expected-line-ending-format = "LF"
 
+[tool.pylint.MESSAGE_CONTROL]
+disable="too-many-positional-arguments"
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 
 [tool.ruff]
+exclude = [
+    ".venv",
+    ".git",
+    ".tox",
+    "docs",
+    "venv",
+    "bin",
+    "lib",
+    "deps",
+    "build",
+]
+line-length = 88
+
+[tool.ruff.lint]
 select = ["D", "E", "F", "G", "I", "PLC", "PLE", "PLR", "PLW", "UP", "W"]
 ignore = [
     "D202",
@@ -104,22 +122,10 @@ ignore = [
     "UP006",   # keep type annotation style as is
     "UP007",   # keep type annotation style as is
 ]
-exclude = [
-    ".venv",
-    ".git",
-    ".tox",
-    "docs",
-    "venv",
-    "bin",
-    "lib",
-    "deps",
-    "build",
-]
-line-length = 88
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 force-sort-within-sections = true
-known-first-party = ["zwave_js_server"]
+known-first-party = ["zwave_js_server", "test"]
 combine-as-imports = true
 split-on-trailing-comma = false
 case-sensitive = true

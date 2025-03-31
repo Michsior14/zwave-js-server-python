@@ -9,6 +9,7 @@ from zwave_js_server.model.node.firmware import NodeFirmwareUpdateInfo
 
 from ...const import (
     MINIMUM_QR_STRING_LENGTH,
+    AssociationCheckResult,
     ControllerStatus,
     ExclusionStrategy,
     InclusionState,
@@ -409,6 +410,12 @@ class Controller(EventBase):
         )
         return cast(bool, data["success"])
 
+    async def async_cancel_secure_bootstrap_s2(self) -> None:
+        """Send cancelSecureBootstrapS2 command to Controller."""
+        await self.client.async_send_command(
+            {"command": "controller.cancel_secure_bootstrap_s2"}, require_schema=40
+        )
+
     async def async_begin_exclusion(
         self, strategy: ExclusionStrategy | None = None
     ) -> bool:
@@ -574,6 +581,7 @@ class Controller(EventBase):
         for key, association_addresses in data["associations"].items():
             associations[int(key)] = [
                 AssociationAddress(
+                    self,
                     node_id=association_address["nodeId"],
                     endpoint=association_address.get("endpoint"),
                 )
@@ -581,10 +589,10 @@ class Controller(EventBase):
             ]
         return associations
 
-    async def async_is_association_allowed(
+    async def async_check_association(
         self, source: AssociationAddress, group: int, association: AssociationAddress
-    ) -> bool:
-        """Send isAssociationAllowed command to Controller."""
+    ) -> AssociationCheckResult:
+        """Send checkAssociation command to Controller."""
         source_data = {"nodeId": source.node_id}
         if source.endpoint is not None:
             source_data["endpoint"] = source.endpoint
@@ -594,13 +602,14 @@ class Controller(EventBase):
             association_data["endpoint"] = association.endpoint
         data = await self.client.async_send_command(
             {
-                "command": "controller.is_association_allowed",
+                "command": "controller.check_association",
                 **source_data,
                 "group": group,
                 "association": association_data,
-            }
+            },
+            require_schema=37,
         )
-        return cast(bool, data["allowed"])
+        return AssociationCheckResult(data["result"])
 
     async def async_add_associations(
         self,
@@ -744,6 +753,23 @@ class Controller(EventBase):
             require_schema=14,
         )
 
+    async def async_backup_nvm_raw_base64(self) -> str:
+        """Send backupNVMRaw command to Controller and return base64 string directly."""
+        data = await self.client.async_send_command(
+            {"command": "controller.backup_nvm_raw"}, require_schema=14
+        )
+        return data["nvmData"]
+
+    async def async_restore_nvm_base64(self, base64_data: str) -> None:
+        """Send restoreNVM command to Controller with base64 data directly."""
+        await self.client.async_send_command(
+            {
+                "command": "controller.restore_nvm",
+                "nvmData": base64_data,
+            },
+            require_schema=14,
+        )
+
     async def async_get_power_level(self) -> dict[str, int]:
         """Send getPowerlevel command to Controller."""
         data = await self.client.async_send_command(
@@ -869,7 +895,7 @@ class Controller(EventBase):
                 f"{event.data}"
             )
 
-        CONTROLLER_EVENT_MODEL_MAP[event.type](**event.data)
+        CONTROLLER_EVENT_MODEL_MAP[event.type].from_dict(event.data)
 
         self._handle_event_protocol(event)
 
@@ -897,6 +923,10 @@ class Controller(EventBase):
 
     def handle_inclusion_started(self, event: Event) -> None:
         """Process an inclusion started event."""
+
+    def handle_inclusion_state_changed(self, event: Event) -> None:
+        """Process an inclusion state changed event."""
+        self.data["inclusionState"] = event.data["state"]
 
     def handle_exclusion_started(self, event: Event) -> None:
         """Process an exclusion started event."""

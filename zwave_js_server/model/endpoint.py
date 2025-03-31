@@ -293,49 +293,13 @@ class Endpoint(EventBase):
 
     async def async_set_raw_config_parameter_value(
         self,
-        new_value: int | str,
+        new_value: int,
         property_: int | str,
         property_key: int | None = None,
         value_size: Literal[1, 2, 4] | None = None,
         value_format: ConfigurationValueFormat | None = None,
-    ) -> tuple[Value, SetConfigParameterResult]:
+    ) -> SetConfigParameterResult:
         """Send setRawConfigParameterValue."""
-        try:
-            zwave_value = next(
-                config_value
-                for config_value in self.get_configuration_values().values()
-                if property_
-                == (
-                    config_value.property_name
-                    if isinstance(property_, str)
-                    else config_value.property_
-                )
-                and property_key == config_value.property_key
-            )
-        except StopIteration:
-            raise NotFoundError(
-                f"Configuration parameter with parameter {property_} and bitmask "
-                f"{property_key} on node {self} could not be found"
-            ) from None
-
-        if not isinstance(new_value, str):
-            value = new_value
-        else:
-            try:
-                value = int(
-                    next(
-                        k
-                        for k, v in zwave_value.metadata.states.items()
-                        if v == new_value
-                    )
-                )
-            except StopIteration:
-                raise NotFoundError(
-                    f"Configuration parameter {zwave_value.value_id} does not have "
-                    f"{new_value} as a valid state. If this is a valid call, you must "
-                    "use the state key instead of the string."
-                ) from None
-
         if (value_size is not None and value_format is None) or (
             value_size is None and value_format is not None
         ):
@@ -351,25 +315,48 @@ class Endpoint(EventBase):
             )
 
         options = {
-            "value": value,
-            "parameter": zwave_value.property_,
-            "bitMask": zwave_value.property_key,
+            "value": new_value,
+            "parameter": property_,
+            "bitMask": property_key,
             "valueSize": value_size,
             "valueFormat": value_format,
         }
 
         data = await self.async_send_command(
             "set_raw_config_parameter_value",
-            options={k: v for k, v in options.items() if v is not None},
             require_schema=33,
+            wait_for_result=None,
+            **{k: v for k, v in options.items() if v is not None},
         )
 
         if data is None:
-            return zwave_value, SetConfigParameterResult(CommandStatus.QUEUED)
+            return SetConfigParameterResult(CommandStatus.QUEUED)
 
         if (result := data.get("result")) is None:
-            return zwave_value, SetConfigParameterResult(CommandStatus.ACCEPTED)
+            return SetConfigParameterResult(CommandStatus.ACCEPTED)
 
-        return zwave_value, SetConfigParameterResult(
+        return SetConfigParameterResult(
             CommandStatus.ACCEPTED, SupervisionResult(result)
         )
+
+    async def async_get_raw_config_parameter_value(
+        self,
+        property_: int,
+        property_key: int | None = None,
+        allow_unexpected_response: bool | None = None,
+    ) -> Any:
+        """Call getRawConfigParameterValue."""
+        options = {
+            "parameter": property_,
+            "bitMask": property_key,
+            "allowUnexpectedResponse": allow_unexpected_response,
+        }
+
+        result = await self.async_send_command(
+            "get_raw_config_parameter_value",
+            require_schema=39,
+            wait_for_result=True,
+            **{k: v for k, v in options.items() if v is not None},
+        )
+        assert result
+        return result["value"]
